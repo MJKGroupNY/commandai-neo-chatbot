@@ -2,7 +2,7 @@
  * Neo Chat Widget - Command AI™
  * Embeddable chat widget for learncommandai.com
  * 
- * Usage: <script src="https://your-vercel-url.vercel.app/widget.js" async defer></script>
+ * Usage: <script src="https://commandai-neo-chatbot.vercel.app/widget.js" async defer></script>
  */
 
 (function() {
@@ -12,7 +12,7 @@
   // CONFIGURATION
   // ============================================
   const CONFIG = {
-    apiEndpoint: 'https://commandai-neo-chatbot.vercel.app/api/chat', // UPDATE AFTER DEPLOY
+    apiEndpoint: 'https://commandai-neo-chatbot.vercel.app/api/chat',
     widgetTitle: 'Neo',
     widgetSubtitle: 'Your AI Strategist',
     brandName: 'Command AI™',
@@ -23,7 +23,8 @@
     ctaUrl: 'https://mjkgroupglobal.com/products/command-ai',
     ctaText: 'Get the Playbook',
     b2bRedirectUrl: 'https://mjkgroupglobal.com',
-    b2bBotName: 'KAi'
+    b2bBotName: 'KAi',
+    autoOpenDelay: 45000 // 45 seconds
   };
 
   // ============================================
@@ -58,6 +59,9 @@
     "Hi — Neo here. I help people navigate Command AI and the 21-day implementation. Whether you're on Day 1 or Day 21, I can point you in the right direction. What are you working on?"
   ];
 
+  // Auto-open message (different from regular opening)
+  const AUTO_OPEN_MESSAGE = "👋 Hey! I noticed you're checking out Command AI. I'm Neo — got questions about how AI can fit into your workflow? I'm here to help.";
+
   // ============================================
   // STYLES
   // ============================================
@@ -71,11 +75,47 @@
       font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    /* Chat Button */
-    #neo-chat-button {
+    /* Chat Button Container */
+    #neo-chat-button-wrapper {
       position: fixed;
       bottom: 24px;
       right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 999998;
+    }
+
+    /* Chat Label */
+    #neo-chat-label {
+      background: ${COLORS.primary};
+      color: ${COLORS.background};
+      padding: 10px 16px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 4px 16px rgba(10, 26, 47, 0.25);
+      white-space: nowrap;
+      animation: neo-label-bounce 2s ease-in-out infinite;
+      cursor: pointer;
+      border: 2px solid ${COLORS.accent};
+    }
+
+    @keyframes neo-label-bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    #neo-chat-label:hover {
+      background: ${COLORS.primaryHover};
+    }
+
+    #neo-chat-button-wrapper.neo-open #neo-chat-label {
+      display: none;
+    }
+
+    /* Chat Button */
+    #neo-chat-button {
       width: 64px;
       height: 64px;
       border-radius: 50%;
@@ -83,13 +123,13 @@
       border: 3px solid ${COLORS.accent};
       cursor: pointer;
       box-shadow: 0 4px 24px rgba(10, 26, 47, 0.3), 0 0 0 0 rgba(212, 175, 55, 0.4);
-      z-index: 999998;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       animation: neo-pulse 2s infinite;
       overflow: hidden;
+      flex-shrink: 0;
     }
 
     @keyframes neo-pulse {
@@ -109,7 +149,7 @@
       border-radius: 50%;
     }
 
-    #neo-chat-button.neo-open {
+    #neo-chat-button-wrapper.neo-open #neo-chat-button {
       animation: none;
     }
 
@@ -119,11 +159,11 @@
       height: 24px;
     }
 
-    #neo-chat-button.neo-open img {
+    #neo-chat-button-wrapper.neo-open #neo-chat-button img {
       display: none;
     }
 
-    #neo-chat-button.neo-open .neo-close-icon {
+    #neo-chat-button-wrapper.neo-open #neo-chat-button .neo-close-icon {
       display: block;
     }
 
@@ -164,11 +204,19 @@
         border-radius: 16px;
       }
 
-      #neo-chat-button {
+      #neo-chat-button-wrapper {
         bottom: 16px;
         right: 16px;
+      }
+
+      #neo-chat-button {
         width: 56px;
         height: 56px;
+      }
+
+      #neo-chat-label {
+        font-size: 12px;
+        padding: 8px 12px;
       }
     }
 
@@ -326,10 +374,15 @@
     .neo-message-bubble a {
       color: ${COLORS.accent};
       text-decoration: underline;
+      word-break: break-word;
+    }
+
+    .neo-message-bubble a:hover {
+      color: ${COLORS.accentHover};
     }
 
     .neo-message.neo-user .neo-message-bubble a {
-      color: ${COLORS.accent};
+      color: ${COLORS.accentLight};
     }
 
     /* Typing Indicator */
@@ -488,6 +541,7 @@
       this.messages = [];
       this.conversationId = null;
       this.isTyping = false;
+      this.autoOpenTriggered = false;
       this.init();
     }
 
@@ -496,6 +550,7 @@
       this.createWidget();
       this.bindEvents();
       this.loadConversation();
+      this.setupAutoOpen();
     }
 
     injectStyles() {
@@ -509,14 +564,17 @@
       const container = document.createElement('div');
       container.id = 'neo-chat-container';
       container.innerHTML = `
-        <!-- Chat Button -->
-        <button id="neo-chat-button" aria-label="Open chat with Neo">
-          <img src="${CONFIG.logoUrl}" alt="Neo">
-          <svg class="neo-close-icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <!-- Chat Button with Label -->
+        <div id="neo-chat-button-wrapper">
+          <div id="neo-chat-label">Chat with Neo</div>
+          <button id="neo-chat-button" aria-label="Open chat with Neo">
+            <img src="${CONFIG.logoUrl}" alt="Neo">
+            <svg class="neo-close-icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
 
         <!-- Chat Window -->
         <div id="neo-chat-window" role="dialog" aria-label="Chat with Neo">
@@ -560,7 +618,9 @@
       document.body.appendChild(container);
 
       // Cache DOM elements
+      this.buttonWrapper = document.getElementById('neo-chat-button-wrapper');
       this.button = document.getElementById('neo-chat-button');
+      this.label = document.getElementById('neo-chat-label');
       this.window = document.getElementById('neo-chat-window');
       this.messagesContainer = document.getElementById('neo-chat-messages');
       this.input = document.getElementById('neo-chat-input');
@@ -568,8 +628,11 @@
     }
 
     bindEvents() {
-      // Toggle chat
+      // Toggle chat from button
       this.button.addEventListener('click', () => this.toggle());
+      
+      // Toggle chat from label
+      this.label.addEventListener('click', () => this.toggle());
 
       // Send message
       this.sendButton.addEventListener('click', () => this.sendMessage());
@@ -596,22 +659,39 @@
       });
     }
 
-    toggle() {
+    setupAutoOpen() {
+      // Check if already opened before (in this session)
+      if (sessionStorage.getItem('neo-auto-opened')) {
+        return;
+      }
+
+      setTimeout(() => {
+        if (!this.isOpen && !this.autoOpenTriggered) {
+          this.autoOpenTriggered = true;
+          sessionStorage.setItem('neo-auto-opened', 'true');
+          this.toggle(true); // true = auto-opened
+        }
+      }, CONFIG.autoOpenDelay);
+    }
+
+    toggle(isAutoOpen = false) {
       this.isOpen = !this.isOpen;
-      this.button.classList.toggle('neo-open', this.isOpen);
+      this.buttonWrapper.classList.toggle('neo-open', this.isOpen);
       this.window.classList.toggle('neo-visible', this.isOpen);
 
       if (this.isOpen) {
         // Show opening message if no messages
         if (this.messages.length === 0) {
-          this.showOpeningMessage();
+          this.showOpeningMessage(isAutoOpen);
         }
         setTimeout(() => this.input.focus(), 300);
       }
     }
 
-    showOpeningMessage() {
-      const message = OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)];
+    showOpeningMessage(isAutoOpen = false) {
+      const message = isAutoOpen 
+        ? AUTO_OPEN_MESSAGE 
+        : OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)];
       this.addMessage('bot', message);
       this.showQuickActions();
     }
@@ -671,9 +751,9 @@
     }
 
     formatMessage(text) {
-      // Convert URLs to links
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      text = text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+      // Convert URLs to clickable links
+      const urlRegex = /(https?:\/\/[^\s<]+)/g;
+      text = text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
       
       // Convert newlines to breaks
       text = text.replace(/\n/g, '<br>');
