@@ -69,7 +69,12 @@ Good: "Stuck on Day 4? The voice profile is tricky. Did you gather your writing 
 
 Bad: "I'm sorry to hear you're having difficulty with Day 4! The voice profile exercise is an important part of the program. I'd be happy to help you work through it step by step!"`;
 
-export default async function handler(req, res) {
+// Generate conversation ID
+function generateId() {
+  return 'neo_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+}
+
+module.exports = async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -128,11 +133,6 @@ export default async function handler(req, res) {
       .map(block => block.text)
       .join('\n');
 
-    // Optional: Log to webhook for lead capture
-    if (process.env.WEBHOOK_URL && conversationId) {
-      logConversation(conversationId, messages, assistantMessage).catch(console.error);
-    }
-
     return res.status(200).json({
       message: assistantMessage,
       conversationId: conversationId || generateId()
@@ -145,31 +145,4 @@ export default async function handler(req, res) {
       message: error.message 
     });
   }
-}
-
-// Generate conversation ID
-function generateId() {
-  return 'neo_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
-}
-
-// Optional webhook logging
-async function logConversation(conversationId, messages, response) {
-  if (!process.env.WEBHOOK_URL) return;
-  
-  try {
-    await fetch(process.env.WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        timestamp: new Date().toISOString(),
-        conversationId,
-        messageCount: messages.length,
-        lastUserMessage: messages[messages.length - 1]?.content || '',
-        response: response.substring(0, 500),
-        source: 'learncommandai.com'
-      })
-    });
-  } catch (e) {
-    console.error('Webhook error:', e);
-  }
-}
+};
