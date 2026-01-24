@@ -146,7 +146,7 @@ module.exports = async (req, res) => {
     const assistantMessage = data.content[0].text;
 
     return res.status(200).json({
-      response: assistantMessage
+      message: assistantMessage
     });
 
   } catch (error) {
