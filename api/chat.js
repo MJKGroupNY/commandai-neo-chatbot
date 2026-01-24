@@ -268,7 +268,8 @@ module.exports = async (req, res) => {
     }
 
     const data = await response.json();
-    res.status(200).json(data);
+    const assistantMessage = data.content[0].text;
+    res.status(200).json({ response: assistantMessage });
 
   } catch (error) {
     console.error('Server error:', error);
